@@ -1,0 +1,43 @@
+# Android Studio / IntelliJ IDEA
+*.iml
+.gradle/
+/.idea/caches/
+/.idea/libraries/
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.idea/
+
+# Local configuration (SDK pathなど)
+local.properties
+
+# Build outputs
+/build/
+app/build/
+**/build/
+
+# macOS
+.DS_Store
+
+# Native build
+.externalNativeBuild/
+.cxx/
+
+# Captures
+/captures/
+
+# Keystore (絶対にコミットしない)
+*.jks
+*.keystore
+
+# APK / AAB
+*.apk
+*.ap_
+*.aab
+
+# Android Profiler
+*.hprof
+
+# Claude Code local settings
+.claude/settings.local.json
