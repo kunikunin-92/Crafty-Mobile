@@ -45,17 +45,16 @@ class LoginViewModel : ViewModel() {
     fun login() {
         val state = _uiState.value
 
-        // 入力バリデーション
         if (state.serverAddress.isBlank()) {
-            _uiState.update { it.copy(errorMessage = "サーバーアドレスを入力してください") }
+            _uiState.update { it.copy(errorMessage = "Please enter a server address.") }
             return
         }
         if (state.username.isBlank()) {
-            _uiState.update { it.copy(errorMessage = "ユーザー名を入力してください") }
+            _uiState.update { it.copy(errorMessage = "Please enter your username.") }
             return
         }
         if (state.password.isBlank()) {
-            _uiState.update { it.copy(errorMessage = "パスワードを入力してください") }
+            _uiState.update { it.copy(errorMessage = "Please enter your password.") }
             return
         }
 
@@ -63,11 +62,19 @@ class LoginViewModel : ViewModel() {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
             try {
-                val api = CraftyApiFactory.create(state.serverAddress)
+                // https:// が付いていなければ自動付与
+                val rawAddress = state.serverAddress.trim()
+                val baseUrl = when {
+                    rawAddress.startsWith("https://") -> rawAddress
+                    rawAddress.startsWith("http://")  -> rawAddress
+                    else -> "https://$rawAddress"
+                }
+
+                val api = CraftyApiFactory.create(baseUrl)
                 val request = LoginRequest(
                     username = state.username,
                     password = state.password,
-                    totp = state.mfaCode.ifBlank { null },
+                    totp     = state.mfaCode.ifBlank { null },
                 )
                 val response = api.login(request)
 
@@ -80,32 +87,34 @@ class LoginViewModel : ViewModel() {
                                 loginSuccess = true,
                                 token        = body.data.token,
                                 userId       = body.data.userId,
+                                // 正規化済みURLを保存してダッシュボードで使う
+                                serverAddress = baseUrl,
                             )
                         }
                     } else {
                         _uiState.update {
                             it.copy(
                                 isLoading    = false,
-                                errorMessage = body?.errorData ?: "ログインに失敗しました",
+                                errorMessage = body?.errorData ?: "Login failed.",
                             )
                         }
                     }
                 } else {
                     val errorMsg = when (response.code()) {
-                        401  -> "ユーザー名またはパスワードが正しくありません"
-                        429  -> "ログイン試行回数が多すぎます。しばらく待ってから再試行してください"
-                        403  -> "アカウントが無効化されています"
-                        else -> "エラーが発生しました (${response.code()})"
+                        401  -> "Incorrect username or password."
+                        429  -> "Too many login attempts. Please try again later."
+                        403  -> "Account is disabled."
+                        else -> "Error: ${response.code()}"
                     }
                     _uiState.update { it.copy(isLoading = false, errorMessage = errorMsg) }
                 }
             } catch (e: Exception) {
                 val errorMsg = when {
                     e.message?.contains("Unable to resolve host") == true ->
-                        "サーバーに接続できません。アドレスを確認してください"
+                        "Cannot connect to server. Please check the address."
                     e.message?.contains("timeout") == true ->
-                        "接続がタイムアウトしました"
-                    else -> "接続エラー: ${e.message}"
+                        "Connection timed out."
+                    else -> "Connection error: ${e.message}"
                 }
                 _uiState.update { it.copy(isLoading = false, errorMessage = errorMsg) }
             }

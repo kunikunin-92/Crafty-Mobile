@@ -30,22 +30,22 @@ import com.knknkn92.craftymobile.ui.theme.CraftyMobileTheme
 
 @Composable
 fun LoginScreen(
-    onLoginSuccess: (token: String, userId: String) -> Unit = { _, _ -> },
+    onLoginSuccess: (token: String, userId: String, baseUrl: String) -> Unit = { _, _, _ -> },
     vm: LoginViewModel = viewModel(),
 ) {
     val state by vm.uiState.collectAsState()
     var showPassword by remember { mutableStateOf(false) }
 
-    // ログイン成功ダイアログ
+    // Success dialog
     if (state.loginSuccess) {
         AlertDialog(
             onDismissRequest = { vm.dismissSuccess() },
-            title   = { Text("ログイン成功") },
-            text    = { Text("Crafty Controller に接続しました。") },
+            title   = { Text("Login Successful") },
+            text    = { Text("Connected to Crafty Controller.") },
             confirmButton = {
                 TextButton(onClick = {
                     vm.dismissSuccess()
-                    onLoginSuccess(state.token ?: "", state.userId ?: "")
+                    onLoginSuccess(state.token ?: "", state.userId ?: "", state.serverAddress)
                 }) {
                     Text("OK")
                 }
@@ -53,11 +53,11 @@ fun LoginScreen(
         )
     }
 
-    // エラーダイアログ
+    // Error dialog
     if (state.errorMessage != null) {
         AlertDialog(
             onDismissRequest = { vm.dismissError() },
-            title   = { Text("エラー") },
+            title   = { Text("Error") },
             text    = { Text(state.errorMessage ?: "") },
             confirmButton = {
                 TextButton(onClick = { vm.dismissError() }) {
@@ -72,12 +72,14 @@ fun LoginScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState())
+            // パンチホール回避のためWindowInsetsで上部余白を確保
+            .windowInsetsPadding(WindowInsets.statusBars)
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(64.dp))
 
-        // ---- アイコン ----
+        // ---- Icon ----
         Box(
             modifier = Modifier
                 .size(80.dp)
@@ -89,7 +91,7 @@ fun LoginScreen(
         ) {
             Icon(
                 imageVector        = Icons.Default.Lock,
-                contentDescription = "ログイン",
+                contentDescription = "Login",
                 tint               = MaterialTheme.colorScheme.background,
                 modifier           = Modifier.size(40.dp)
             )
@@ -97,9 +99,9 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // ---- タイトル ----
+        // ---- Title ----
         Text(
-            text  = "ログイン",
+            text  = "Sign In",
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onBackground,
         )
@@ -107,19 +109,19 @@ fun LoginScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text  = "アカウント情報を入力してください",
+            text  = "Enter your Crafty Controller credentials",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // ---- サーバーアドレス ----
+        // ---- Server Address ----
         OutlinedTextField(
             value         = state.serverAddress,
             onValueChange = { vm.onServerAddressChange(it) },
-            label         = { Text("サーバーアドレス") },
-            placeholder   = { Text("https://example.com:8443") },
+            label         = { Text("Server Address") },
+            placeholder   = { Text("example.com:8443") },
             leadingIcon   = {
                 Icon(
                     imageVector        = Icons.Outlined.Dns,
@@ -138,11 +140,11 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // ---- ユーザー名 ----
+        // ---- Username ----
         OutlinedTextField(
             value         = state.username,
             onValueChange = { vm.onUsernameChange(it) },
-            label         = { Text("ユーザー名") },
+            label         = { Text("Username") },
             placeholder   = { Text("username") },
             leadingIcon   = {
                 Icon(
@@ -162,11 +164,11 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // ---- パスワード ----
+        // ---- Password ----
         OutlinedTextField(
             value         = state.password,
             onValueChange = { vm.onPasswordChange(it) },
-            label         = { Text("パスワード") },
+            label         = { Text("Password") },
             placeholder   = { Text("••••••••") },
             leadingIcon   = {
                 Icon(
@@ -178,10 +180,10 @@ fun LoginScreen(
             trailingIcon  = {
                 IconButton(onClick = { showPassword = !showPassword }) {
                     Icon(
-                        imageVector = if (showPassword) Icons.Default.VisibilityOff
-                                      else Icons.Default.Visibility,
-                        contentDescription = if (showPassword) "パスワードを隠す" else "パスワードを表示",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        imageVector        = if (showPassword) Icons.Default.VisibilityOff
+                                            else Icons.Default.Visibility,
+                        contentDescription = if (showPassword) "Hide password" else "Show password",
+                        tint               = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             },
@@ -198,7 +200,7 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // ---- MFAコード ----
+        // ---- MFA Code ----
         OutlinedTextField(
             value         = state.mfaCode,
             onValueChange = { vm.onMfaCodeChange(it) },
@@ -222,7 +224,7 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // ---- ログインボタン ----
+        // ---- Login Button ----
         Button(
             onClick  = { vm.login() },
             enabled  = !state.isLoading,
@@ -237,13 +239,13 @@ fun LoginScreen(
         ) {
             if (state.isLoading) {
                 CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    color    = MaterialTheme.colorScheme.background,
+                    modifier    = Modifier.size(24.dp),
+                    color       = MaterialTheme.colorScheme.background,
                     strokeWidth = 2.dp,
                 )
             } else {
                 Text(
-                    text     = "ログイン",
+                    text     = "Sign In",
                     fontSize = 16.sp,
                     style    = MaterialTheme.typography.labelLarge,
                 )

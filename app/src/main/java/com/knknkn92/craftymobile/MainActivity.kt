@@ -6,7 +6,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import com.knknkn92.craftymobile.ui.dashboard.DashboardScreen
 import com.knknkn92.craftymobile.ui.login.LoginScreen
 import com.knknkn92.craftymobile.ui.theme.CraftyMobileTheme
 
@@ -17,13 +19,31 @@ class MainActivity : ComponentActivity() {
         setContent {
             CraftyMobileTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    LoginScreen(
-                        onLoginSuccess = { token, userId ->
-                            // TODO: メイン画面への遷移 (Navigation実装後)
-                        }
-                    )
+                    AppRoot()
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun AppRoot() {
+    var token   by remember { mutableStateOf<String?>(null) }
+    var userId  by remember { mutableStateOf<String?>(null) }
+    var baseUrl by remember { mutableStateOf<String?>(null) }
+
+    if (token != null && baseUrl != null) {
+        DashboardScreen(
+            baseUrl = baseUrl!!,
+            token   = token!!,
+        )
+    } else {
+        LoginScreen(
+            onLoginSuccess = { t, u, url ->
+                token   = t
+                userId  = u
+                baseUrl = url
+            }
+        )
     }
 }
