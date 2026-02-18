@@ -18,7 +18,7 @@ class MainActivity : ComponentActivity() {
             CraftyMobileTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     LoginScreen(
-                        onLoginSuccess = {
+                        onLoginSuccess = { token, userId ->
                             // TODO: メイン画面への遷移 (Navigation実装後)
                         }
                     )

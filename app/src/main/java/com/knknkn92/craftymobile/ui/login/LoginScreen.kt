@@ -25,30 +25,42 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.knknkn92.craftymobile.ui.theme.CraftyMobileTheme
 
 @Composable
 fun LoginScreen(
-    onLoginSuccess: () -> Unit = {}
+    onLoginSuccess: (token: String, userId: String) -> Unit = { _, _ -> },
+    vm: LoginViewModel = viewModel(),
 ) {
-    var serverAddress by remember { mutableStateOf("") }
-    var username      by remember { mutableStateOf("") }
-    var password      by remember { mutableStateOf("") }
-    var mfaCode       by remember { mutableStateOf("") }
-    var showPassword  by remember { mutableStateOf(false) }
-    var showSuccessDialog by remember { mutableStateOf(false) }
+    val state by vm.uiState.collectAsState()
+    var showPassword by remember { mutableStateOf(false) }
 
     // ログイン成功ダイアログ
-    if (showSuccessDialog) {
+    if (state.loginSuccess) {
         AlertDialog(
-            onDismissRequest = { showSuccessDialog = false },
+            onDismissRequest = { vm.dismissSuccess() },
             title   = { Text("ログイン成功") },
             text    = { Text("Crafty Controller に接続しました。") },
             confirmButton = {
                 TextButton(onClick = {
-                    showSuccessDialog = false
-                    onLoginSuccess()
+                    vm.dismissSuccess()
+                    onLoginSuccess(state.token ?: "", state.userId ?: "")
                 }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
+    // エラーダイアログ
+    if (state.errorMessage != null) {
+        AlertDialog(
+            onDismissRequest = { vm.dismissError() },
+            title   = { Text("エラー") },
+            text    = { Text(state.errorMessage ?: "") },
+            confirmButton = {
+                TextButton(onClick = { vm.dismissError() }) {
                     Text("OK")
                 }
             }
@@ -104,10 +116,10 @@ fun LoginScreen(
 
         // ---- サーバーアドレス ----
         OutlinedTextField(
-            value         = serverAddress,
-            onValueChange = { serverAddress = it },
+            value         = state.serverAddress,
+            onValueChange = { vm.onServerAddressChange(it) },
             label         = { Text("サーバーアドレス") },
-            placeholder   = { Text("https://example.com") },
+            placeholder   = { Text("https://example.com:8443") },
             leadingIcon   = {
                 Icon(
                     imageVector        = Icons.Outlined.Dns,
@@ -128,8 +140,8 @@ fun LoginScreen(
 
         // ---- ユーザー名 ----
         OutlinedTextField(
-            value         = username,
-            onValueChange = { username = it },
+            value         = state.username,
+            onValueChange = { vm.onUsernameChange(it) },
             label         = { Text("ユーザー名") },
             placeholder   = { Text("username") },
             leadingIcon   = {
@@ -152,8 +164,8 @@ fun LoginScreen(
 
         // ---- パスワード ----
         OutlinedTextField(
-            value         = password,
-            onValueChange = { password = it },
+            value         = state.password,
+            onValueChange = { vm.onPasswordChange(it) },
             label         = { Text("パスワード") },
             placeholder   = { Text("••••••••") },
             leadingIcon   = {
@@ -188,16 +200,11 @@ fun LoginScreen(
 
         // ---- MFAコード ----
         OutlinedTextField(
-            value         = mfaCode,
-            onValueChange = { value ->
-                // 数字のみ・最大6桁
-                if (value.all { it.isDigit() } && value.length <= 6) {
-                    mfaCode = value
-                }
-            },
-            label       = { Text("Authenticator Code (If MFA is Enabled)") },
-            placeholder = { Text("123456") },
-            leadingIcon = {
+            value         = state.mfaCode,
+            onValueChange = { vm.onMfaCodeChange(it) },
+            label         = { Text("Authenticator Code (If MFA is Enabled)") },
+            placeholder   = { Text("123456") },
+            leadingIcon   = {
                 Icon(
                     imageVector        = Icons.Outlined.Security,
                     contentDescription = null,
@@ -217,7 +224,8 @@ fun LoginScreen(
 
         // ---- ログインボタン ----
         Button(
-            onClick = { showSuccessDialog = true },
+            onClick  = { vm.login() },
+            enabled  = !state.isLoading,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp),
@@ -227,11 +235,19 @@ fun LoginScreen(
                 contentColor   = MaterialTheme.colorScheme.background,
             )
         ) {
-            Text(
-                text     = "ログイン",
-                fontSize = 16.sp,
-                style    = MaterialTheme.typography.labelLarge,
-            )
+            if (state.isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    color    = MaterialTheme.colorScheme.background,
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                Text(
+                    text     = "ログイン",
+                    fontSize = 16.sp,
+                    style    = MaterialTheme.typography.labelLarge,
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(32.dp))
