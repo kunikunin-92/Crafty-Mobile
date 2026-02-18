@@ -19,80 +19,92 @@ data class ServerWithStats(
     val stats: ServerStats? = null,
 )
 
+/** ServerTab + VPSステータス集計用のstate */
 data class DashboardUiState(
     val servers: List<ServerWithStats> = emptyList(),
     val isLoading: Boolean = false,
+    val actionInProgress: String? = null,   // 実行中アクションのserverId
+    val snackbarMessage: String? = null,
     val errorMessage: String? = null,
-)
+) {
+    // VPSステータスをサーバー一覧から集計
+    val totalPlayers: Int get() = servers.sumOf { it.stats?.online ?: 0 }
+    val totalMaxPlayers: Int get() = servers.sumOf { it.stats?.max ?: 0 }
+    // CPU/MEMは全サーバーの平均
+    val avgCpu: Float get() = if (servers.isEmpty()) 0f
+        else servers.map { it.stats?.cpu ?: 0f }.average().toFloat()
+    val avgMem: Float get() = if (servers.isEmpty()) 0f
+        else servers.map { it.stats?.memPercent ?: 0f }.average().toFloat()
+}
 
 class DashboardViewModel(
-    private val baseUrl: String,
-    private val token: String,
+    val baseUrl: String,
+    val token: String,
 ) : ViewModel() {
 
     private val bearerToken get() = "Bearer $token"
+    private val api by lazy { CraftyApiFactory.create(baseUrl) }
 
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
 
-    init {
-        loadServers()
-    }
+    init { loadServers() }
 
     fun loadServers() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             try {
-                val api = CraftyApiFactory.create(baseUrl)
-
-                // サーバー一覧取得
                 val serversResponse = api.getServers(bearerToken)
                 if (!serversResponse.isSuccessful || serversResponse.body()?.status != "ok") {
                     _uiState.update {
-                        it.copy(
-                            isLoading    = false,
-                            errorMessage = "Failed to load servers (${serversResponse.code()})",
-                        )
+                        it.copy(isLoading = false,
+                            errorMessage = "Failed to load servers (${serversResponse.code()})")
                     }
                     return@launch
                 }
-
                 val servers = serversResponse.body()?.data ?: emptyList()
 
-                // 各サーバーのstatsを並列取得
+                // statsを並列取得
                 val serversWithStats = servers.map { server ->
                     async {
-                        val statsResponse = try {
-                            api.getServerStats(bearerToken, server.serverId)
-                        } catch (e: Exception) {
-                            null
-                        }
+                        val statsResp = runCatching { api.getServerStats(bearerToken, server.serverId) }.getOrNull()
                         ServerWithStats(
                             info  = server,
-                            stats = if (statsResponse?.isSuccessful == true)
-                                        statsResponse.body()?.data
-                                    else null,
+                            stats = if (statsResp?.isSuccessful == true) statsResp.body()?.data else null,
                         )
                     }
                 }.awaitAll()
 
-                _uiState.update {
-                    it.copy(isLoading = false, servers = serversWithStats)
-                }
+                _uiState.update { it.copy(isLoading = false, servers = serversWithStats) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false, errorMessage = "Connection error: ${e.message}") }
+            }
+        }
+    }
+
+    /** Stop / Restart / Kill / Start */
+    fun serverAction(serverId: String, action: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(actionInProgress = serverId) }
+            try {
+                val resp = api.serverAction(bearerToken, serverId, action)
+                val msg = if (resp.isSuccessful) "$action sent successfully."
+                          else "Failed: ${resp.code()}"
+                _uiState.update { it.copy(actionInProgress = null, snackbarMessage = msg) }
+                // 少し待ってからstatsを再取得
+                kotlinx.coroutines.delay(2000)
+                loadServers()
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(
-                        isLoading    = false,
-                        errorMessage = "Connection error: ${e.message}",
-                    )
+                    it.copy(actionInProgress = null, snackbarMessage = "Error: ${e.message}")
                 }
             }
         }
     }
 
-    fun dismissError() = _uiState.update { it.copy(errorMessage = null) }
+    fun dismissError()   = _uiState.update { it.copy(errorMessage = null) }
+    fun dismissSnackbar() = _uiState.update { it.copy(snackbarMessage = null) }
 
-    // Factory for passing arguments to ViewModel
     class Factory(private val baseUrl: String, private val token: String) :
         ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")

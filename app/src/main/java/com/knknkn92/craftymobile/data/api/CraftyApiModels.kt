@@ -52,21 +52,52 @@ data class ServerStatsResponse(
 )
 
 data class ServerStats(
-    @SerializedName("server_id")       val serverId: String? = null,
-    @SerializedName("server_name")     val serverName: String? = null,
-    @SerializedName("running")         val running: Boolean = false,
-    @SerializedName("crashed")         val crashed: Boolean = false,
-    @SerializedName("cpu")             val cpu: Float = 0f,
-    @SerializedName("mem")             val mem: Float = 0f,
-    @SerializedName("mem_percent")     val memPercent: Float = 0f,
-    @SerializedName("online")          val online: Int = 0,
-    @SerializedName("max")             val max: Int = 0,
-    @SerializedName("players")         val players: String? = null,
-    @SerializedName("version")         val version: String? = null,
-    @SerializedName("world_name")      val worldName: String? = null,
-    @SerializedName("world_size")      val worldSize: String? = null,
-    @SerializedName("started")         val started: String? = null,
-    @SerializedName("desc")            val desc: String? = null,
-    @SerializedName("updating")        val updating: Boolean = false,
-    @SerializedName("waiting_start")   val waitingStart: Boolean = false,
+    @SerializedName("server_id")     val serverId: String? = null,
+    @SerializedName("server_name")   val serverName: String? = null,
+    @SerializedName("running")       val running: Boolean = false,
+    @SerializedName("crashed")       val crashed: Boolean = false,
+    @SerializedName("cpu")           val cpu: Float = 0f,
+    @SerializedName("mem")           val mem: Float = 0f,
+    @SerializedName("mem_percent")   val memPercent: Float = 0f,
+    @SerializedName("online")        val online: Int = 0,
+    @SerializedName("max")           val max: Int = 0,
+    @SerializedName("players")       val players: String? = null,
+    @SerializedName("version")       val version: String? = null,
+    @SerializedName("world_name")    val worldName: String? = null,
+    @SerializedName("world_size")    val worldSize: String? = null,
+    @SerializedName("started")       val started: String? = null,
+    @SerializedName("desc")          val desc: String? = null,
+    @SerializedName("updating")      val updating: Boolean = false,
+    @SerializedName("waiting_start") val waitingStart: Boolean = false,
+)
+
+// ============================================================
+// Server Action  POST /api/v2/servers/{id}/action/{action}
+// ============================================================
+
+data class ActionResponse(
+    @SerializedName("status")     val status: String,
+    @SerializedName("error")      val error: String? = null,
+    @SerializedName("error_data") val errorData: String? = null,
+)
+
+// ============================================================
+// Server Logs   GET /api/v2/servers/{id}/logs
+// ============================================================
+
+data class LogsResponse(
+    @SerializedName("status") val status: String,
+    @SerializedName("data")   val data: LogsData? = null,
+)
+
+data class LogsData(
+    @SerializedName("logs") val logs: List<String>? = null,
+)
+
+// ============================================================
+// Stdin (console command)  POST /api/v2/servers/{id}/stdin
+// ============================================================
+
+data class StdinRequest(
+    @SerializedName("command") val command: String,
 )

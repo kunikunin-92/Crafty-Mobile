@@ -33,14 +33,32 @@ interface CraftyApiService {
         @Header("Authorization") token: String,
         @Path("serverId") serverId: String,
     ): Response<ServerStatsResponse>
+
+    // ---- Actions: start / stop / restart / kill / backup ----
+    @POST("api/v2/servers/{serverId}/action/{action}")
+    suspend fun serverAction(
+        @Header("Authorization") token: String,
+        @Path("serverId") serverId: String,
+        @Path("action") action: String,
+    ): Response<ActionResponse>
+
+    // ---- Console command (stdin) ----
+    @POST("api/v2/servers/{serverId}/stdin")
+    suspend fun sendCommand(
+        @Header("Authorization") token: String,
+        @Path("serverId") serverId: String,
+        @Body request: StdinRequest,
+    ): Response<ActionResponse>
+
+    // ---- Logs ----
+    @GET("api/v2/servers/{serverId}/logs")
+    suspend fun getLogs(
+        @Header("Authorization") token: String,
+        @Path("serverId") serverId: String,
+    ): Response<LogsResponse>
 }
 
 object CraftyApiFactory {
-    /**
-     * 指定したベースURL向けのCraftyApiServiceを生成する。
-     * Crafty ControllerはデフォルトでSelf-Signed証明書を使うため、
-     * SSL検証をスキップするクライアントを使用。
-     */
     fun create(baseUrl: String): CraftyApiService {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BODY
