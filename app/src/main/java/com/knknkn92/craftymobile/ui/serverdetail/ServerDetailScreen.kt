@@ -66,6 +66,27 @@ fun ServerDetailScreen(
         )
     }
 
+    // 確認ダイアログ (Stop / Restart / Kill)
+    val pending = state.pendingAction
+    if (pending != null) {
+        AlertDialog(
+            onDismissRequest = { vm.cancelAction() },
+            title = { Text("${pending.label} Server") },
+            text  = { Text("Are you sure you want to ${pending.label.lowercase()} this server?") },
+            confirmButton = {
+                TextButton(
+                    onClick = { vm.confirmAction() },
+                    colors  = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) { Text(pending.label) }
+            },
+            dismissButton = {
+                TextButton(onClick = { vm.cancelAction() }) { Text("Cancel") }
+            },
+        )
+    }
+
     // BAN List dialog state
     var banListOpen by remember { mutableStateOf(false) }
 
@@ -102,7 +123,7 @@ fun ServerDetailScreen(
                         )
                     } else {
                         // Stop
-                        IconButton(onClick = { vm.serverAction("stop_server") }) {
+                        IconButton(onClick = { vm.requestAction("stop_server") }) {
                             Icon(
                                 Icons.Default.StopCircle,
                                 contentDescription = "Stop",
@@ -110,7 +131,7 @@ fun ServerDetailScreen(
                             )
                         }
                         // Restart
-                        IconButton(onClick = { vm.serverAction("restart_server") }) {
+                        IconButton(onClick = { vm.requestAction("restart_server") }) {
                             Icon(
                                 Icons.Default.RestartAlt,
                                 contentDescription = "Restart",
@@ -118,7 +139,7 @@ fun ServerDetailScreen(
                             )
                         }
                         // Kill
-                        IconButton(onClick = { vm.serverAction("kill_server") }) {
+                        IconButton(onClick = { vm.requestAction("kill_server") }) {
                             Icon(
                                 Icons.Default.Close,
                                 contentDescription = "Kill",

@@ -36,23 +36,6 @@ fun LoginScreen(
     val state by vm.uiState.collectAsState()
     var showPassword by remember { mutableStateOf(false) }
 
-    // Success dialog
-    if (state.loginSuccess) {
-        AlertDialog(
-            onDismissRequest = { vm.dismissSuccess() },
-            title   = { Text("Login Successful") },
-            text    = { Text("Connected to Crafty Controller.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    vm.dismissSuccess()
-                    onLoginSuccess(state.token ?: "", state.userId ?: "", state.serverAddress)
-                }) {
-                    Text("OK")
-                }
-            }
-        )
-    }
-
     // Error dialog
     if (state.errorMessage != null) {
         AlertDialog(
@@ -226,7 +209,7 @@ fun LoginScreen(
 
         // ---- Login Button ----
         Button(
-            onClick  = { vm.login() },
+            onClick  = { vm.login(onLoginSuccess) },
             enabled  = !state.isLoading,
             modifier = Modifier
                 .fillMaxWidth()

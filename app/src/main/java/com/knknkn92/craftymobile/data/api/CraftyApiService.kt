@@ -1,5 +1,6 @@
 package com.knknkn92.craftymobile.data.api
 
+import com.google.gson.GsonBuilder
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Response
@@ -82,10 +83,16 @@ object CraftyApiFactory {
 
         val normalizedUrl = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
 
+        // lenient=true: 型の不一致 (例: Boolean期待→数値) でも例外を投げずに無視する
+        val gson = GsonBuilder()
+            .setLenient()
+            .serializeNulls()
+            .create()
+
         return Retrofit.Builder()
             .baseUrl(normalizedUrl)
             .client(client)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
             .create(CraftyApiService::class.java)
     }

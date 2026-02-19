@@ -16,7 +16,6 @@ data class LoginUiState(
     val password: String = "",
     val mfaCode: String = "",
     val isLoading: Boolean = false,
-    val loginSuccess: Boolean = false,
     val token: String? = null,
     val userId: String? = null,
     val errorMessage: String? = null,
@@ -42,7 +41,7 @@ class LoginViewModel : ViewModel() {
         }
     }
 
-    fun login() {
+    fun login(onLoginSuccess: (token: String, userId: String, baseUrl: String) -> Unit = { _, _, _ -> }) {
         val state = _uiState.value
 
         if (state.serverAddress.isBlank()) {
@@ -81,16 +80,16 @@ class LoginViewModel : ViewModel() {
                 if (response.isSuccessful) {
                     val body = response.body()
                     if (body?.status == "ok" && body.data != null) {
+                        // loginSuccess フラグ不要 — 直接コールバックで遷移
                         _uiState.update {
                             it.copy(
-                                isLoading    = false,
-                                loginSuccess = true,
-                                token        = body.data.token,
-                                userId       = body.data.userId,
-                                // 正規化済みURLを保存してダッシュボードで使う
+                                isLoading     = false,
+                                token         = body.data.token,
+                                userId        = body.data.userId,
                                 serverAddress = baseUrl,
                             )
                         }
+                        onLoginSuccess(body.data.token, body.data.userId, baseUrl)
                     } else {
                         _uiState.update {
                             it.copy(
@@ -121,6 +120,5 @@ class LoginViewModel : ViewModel() {
         }
     }
 
-    fun dismissSuccess() = _uiState.update { it.copy(loginSuccess = false) }
-    fun dismissError()   = _uiState.update { it.copy(errorMessage = null) }
+    fun dismissError() = _uiState.update { it.copy(errorMessage = null) }
 }

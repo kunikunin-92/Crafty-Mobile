@@ -1,17 +1,23 @@
 package com.knknkn92.craftymobile.ui.serverdetail
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.knknkn92.craftymobile.data.api.CraftyApiFactory
 import com.knknkn92.craftymobile.data.api.ServerInfo
 import com.knknkn92.craftymobile.data.api.StdinRequest
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+
+private const val TAG = "ServerDetailVM"
+private const val POLL_INTERVAL_MS = 5_000L   // 5秒ポーリング
 
 // ── ログ1行のパース結果 ────────────────────────────
 data class ParsedLogLine(
@@ -21,9 +27,15 @@ data class ParsedLogLine(
     val message: String,
 )
 
-// ── プレイヤー情報（APIから取れない場合はコマンドで取得）──
+// ── プレイヤー情報 ─────────────────────────────────
 data class OnlinePlayer(
     val name: String,
+)
+
+// ── 確認ダイアログ用 ──────────────────────────────
+data class PendingAction(
+    val action: String,         // "stop_server" / "restart_server" / "kill_server"
+    val label: String,          // 表示用ラベル
 )
 
 // ── UI State ──────────────────────────────────────
@@ -41,6 +53,7 @@ data class ServerDetailUiState(
     val isPlayersLoading: Boolean = false,
     // Action
     val actionInProgress: Boolean = false,
+    val pendingAction: PendingAction? = null,   // 確認ダイアログ用
     // Snackbar
     val snackbarMessage: String? = null,
     val errorMessage: String? = null,
@@ -75,80 +88,109 @@ class ServerDetailViewModel(
     private val _uiState = MutableStateFlow(ServerDetailUiState(serverInfo = initialServerInfo))
     val uiState: StateFlow<ServerDetailUiState> = _uiState.asStateFlow()
 
+    private var pollingJob: Job? = null
+
     init {
-        loadLogs()
+        startPolling()
     }
 
-    // ── ログ取得（Terminal / Log 両方に使う）─────────
-    fun loadLogs() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isTerminalLoading = true, isLogLoading = true) }
-            try {
-                val resp = api.getLogs(bearerToken, serverId)
-                if (resp.isSuccessful) {
-                    val rawLines = resp.body()?.logLines() ?: emptyList()
-                    val parsed = rawLines.map { parseLine(it) }
-                    _uiState.update {
-                        it.copy(
-                            terminalLines    = rawLines,
-                            logLines         = parsed,
-                            isTerminalLoading = false,
-                            isLogLoading     = false,
-                        )
-                    }
-                } else {
-                    _uiState.update {
-                        it.copy(
-                            isTerminalLoading = false,
-                            isLogLoading      = false,
-                            snackbarMessage   = "Failed to load logs (${resp.code()})",
-                        )
-                    }
-                }
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isTerminalLoading = false,
-                        isLogLoading      = false,
-                        snackbarMessage   = "Error: ${e.message}",
-                    )
-                }
+    override fun onCleared() {
+        super.onCleared()
+        stopPolling()
+    }
+
+    // ── ポーリング開始 ────────────────────────────────
+    fun startPolling() {
+        pollingJob?.cancel()
+        pollingJob = viewModelScope.launch {
+            while (isActive) {
+                loadLogsInternal()
+                delay(POLL_INTERVAL_MS)
             }
         }
     }
 
+    fun stopPolling() {
+        pollingJob?.cancel()
+        pollingJob = null
+    }
+
+    // ── ログ取得（内部用・ポーリングから呼ばれる）────
+    private suspend fun loadLogsInternal() {
+        try {
+            val resp = api.getLogs(bearerToken, serverId)
+            if (resp.isSuccessful) {
+                val rawLines = resp.body()?.logLines() ?: emptyList()
+                val parsed = rawLines.map { parseLine(it) }
+                _uiState.update {
+                    it.copy(
+                        terminalLines     = rawLines,
+                        logLines          = parsed,
+                        isTerminalLoading = false,
+                        isLogLoading      = false,
+                    )
+                }
+            } else {
+                Log.w(TAG, "getLogs failed: HTTP ${resp.code()}")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "getLogs error: ${e.message}", e)
+        }
+    }
+
+    // ── 手動リロード ─────────────────────────────────
+    fun loadLogs() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isTerminalLoading = true, isLogLoading = true) }
+            loadLogsInternal()
+            _uiState.update { it.copy(isTerminalLoading = false, isLogLoading = false) }
+        }
+    }
+
     // ── コマンド送信 ─────────────────────────────────
+    // Crafty Controller stdin は { "command": "..." } JSON を受け取る
+    // コマンドをそのまま送る（HTML エスケープ不要）
     fun sendCommand(command: String) {
         if (command.isBlank()) return
+        Log.d(TAG, "sendCommand: '$command'")
         viewModelScope.launch {
             try {
-                api.sendCommand(bearerToken, serverId, StdinRequest(command))
-                // コマンド送信後にログを再取得
-                delay(500)
-                loadLogs()
+                val resp = api.sendCommand(bearerToken, serverId, StdinRequest(command))
+                Log.d(TAG, "sendCommand result: isSuccessful=${resp.isSuccessful} code=${resp.code()}")
+                if (!resp.isSuccessful) {
+                    _uiState.update { it.copy(snackbarMessage = "Command failed: HTTP ${resp.code()}") }
+                }
+                // コマンド送信後 1s 待ってからログ更新
+                delay(1000)
+                loadLogsInternal()
             } catch (e: Exception) {
+                Log.e(TAG, "sendCommand error: ${e.message}", e)
                 _uiState.update { it.copy(snackbarMessage = "Error: ${e.message}") }
             }
         }
     }
 
-    // ── プレイヤー一覧（logsから /list コマンドで取得） ─
-    // Crafty Controller の stats には players フィールドがあるが、
-    // 詳細API がないため list コマンドを使う実装も考えられる。
-    // ここでは stats の players JSON フィールドから名前を取る
+    // ── プレイヤー一覧取得 ───────────────────────────
+    // stats.players は "Player1,Player2" または "False" (未接続時) の文字列
     fun loadPlayers() {
         viewModelScope.launch {
             _uiState.update { it.copy(isPlayersLoading = true) }
             try {
                 val statsResp = api.getServerStats(bearerToken, serverId)
+                Log.d(TAG, "getServerStats: isSuccessful=${statsResp.isSuccessful} code=${statsResp.code()}")
                 if (statsResp.isSuccessful) {
                     val stats = statsResp.body()?.data
-                    // players フィールドは "Player1, Player2" 形式の文字列
-                    val names = stats?.players
-                        ?.split(",")
-                        ?.map { it.trim() }
-                        ?.filter { it.isNotEmpty() }
-                        ?: emptyList()
+                    Log.d(TAG, "stats: running=${stats?.running} cpu=${stats?.cpu} players='${stats?.players}'")
+
+                    val rawPlayers = stats?.players ?: ""
+                    // "False" や空文字列は「プレイヤーなし」として扱う
+                    val names = if (rawPlayers.isBlank() || rawPlayers.equals("False", ignoreCase = true)) {
+                        emptyList()
+                    } else {
+                        rawPlayers.split(",")
+                            .map { it.trim() }
+                            .filter { it.isNotEmpty() }
+                    }
                     _uiState.update {
                         it.copy(
                             onlinePlayers    = names.map { OnlinePlayer(it) },
@@ -156,9 +198,16 @@ class ServerDetailViewModel(
                         )
                     }
                 } else {
-                    _uiState.update { it.copy(isPlayersLoading = false) }
+                    Log.w(TAG, "getServerStats failed: HTTP ${statsResp.code()}")
+                    _uiState.update {
+                        it.copy(
+                            isPlayersLoading = false,
+                            snackbarMessage  = "Failed to get player list: HTTP ${statsResp.code()}",
+                        )
+                    }
                 }
             } catch (e: Exception) {
+                Log.e(TAG, "loadPlayers error: ${e.message}", e)
                 _uiState.update {
                     it.copy(isPlayersLoading = false, snackbarMessage = "Error: ${e.message}")
                 }
@@ -169,26 +218,40 @@ class ServerDetailViewModel(
     // ── Kick / Ban（コマンド経由）───────────────────
     fun kickPlayer(name: String) {
         sendCommand("kick $name")
-        _uiState.update { it.copy(snackbarMessage = "Kicked $name") }
+        _uiState.update { it.copy(snackbarMessage = "Kicking $name...") }
     }
 
     fun banPlayer(name: String) {
         sendCommand("ban $name")
-        _uiState.update { it.copy(snackbarMessage = "Banned $name") }
+        _uiState.update { it.copy(snackbarMessage = "Banning $name...") }
     }
 
     fun unbanPlayer(name: String) {
         sendCommand("pardon $name")
-        _uiState.update { it.copy(snackbarMessage = "Unbanned $name") }
+        _uiState.update { it.copy(snackbarMessage = "Unbanning $name...") }
     }
 
-    // ── Stop / Restart / Kill ────────────────────────
-    fun serverAction(action: String) {
+    // ── Stop / Restart / Kill（確認ダイアログ経由）──
+    fun requestAction(action: String) {
+        val label = when (action) {
+            "stop_server"    -> "Stop"
+            "restart_server" -> "Restart"
+            "kill_server"    -> "Kill"
+            "start_server"   -> "Start"
+            else             -> action
+        }
+        _uiState.update { it.copy(pendingAction = PendingAction(action, label)) }
+    }
+
+    fun confirmAction() {
+        val pending = _uiState.value.pendingAction ?: return
+        _uiState.update { it.copy(pendingAction = null) }
         viewModelScope.launch {
             _uiState.update { it.copy(actionInProgress = true) }
             try {
-                val resp = api.serverAction(bearerToken, serverId, action)
-                val msg = if (resp.isSuccessful) "$action sent." else "Failed: ${resp.code()}"
+                val resp = api.serverAction(bearerToken, serverId, pending.action)
+                val msg = if (resp.isSuccessful) "${pending.label} command sent."
+                          else "Failed: HTTP ${resp.code()}"
                 _uiState.update { it.copy(actionInProgress = false, snackbarMessage = msg) }
             } catch (e: Exception) {
                 _uiState.update {
@@ -196,6 +259,10 @@ class ServerDetailViewModel(
                 }
             }
         }
+    }
+
+    fun cancelAction() {
+        _uiState.update { it.copy(pendingAction = null) }
     }
 
     // ── Log filter ───────────────────────────────────
