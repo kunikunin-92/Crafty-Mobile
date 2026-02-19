@@ -65,17 +65,29 @@ class DashboardViewModel(
                 val servers = serversResponse.body()?.data ?: emptyList()
 
                 // statsを並列取得
+                val statsErrors = mutableListOf<String>()
                 val serversWithStats = servers.map { server ->
                     async {
-                        val statsResp = runCatching { api.getServerStats(bearerToken, server.serverId) }.getOrNull()
-                        ServerWithStats(
-                            info  = server,
-                            stats = if (statsResp?.isSuccessful == true) statsResp.body()?.data else null,
-                        )
+                        try {
+                            val statsResp = api.getServerStats(bearerToken, server.serverId)
+                            ServerWithStats(
+                                info  = server,
+                                stats = if (statsResp.isSuccessful) statsResp.body()?.data
+                                        else {
+                                            statsErrors.add("Stats ${server.serverName}: HTTP ${statsResp.code()}")
+                                            null
+                                        },
+                            )
+                        } catch (e: Exception) {
+                            statsErrors.add("Stats ${server.serverName}: ${e.message}")
+                            ServerWithStats(info = server, stats = null)
+                        }
                     }
                 }.awaitAll()
 
-                _uiState.update { it.copy(isLoading = false, servers = serversWithStats) }
+                val snackMsg = if (statsErrors.isNotEmpty()) statsErrors.joinToString("\n") else null
+
+                _uiState.update { it.copy(isLoading = false, servers = serversWithStats, snackbarMessage = snackMsg) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, errorMessage = "Connection error: ${e.message}") }
             }

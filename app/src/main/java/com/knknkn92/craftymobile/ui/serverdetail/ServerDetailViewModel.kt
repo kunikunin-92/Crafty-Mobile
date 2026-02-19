@@ -86,7 +86,7 @@ class ServerDetailViewModel(
             try {
                 val resp = api.getLogs(bearerToken, serverId)
                 if (resp.isSuccessful) {
-                    val rawLines = resp.body()?.data?.logs ?: emptyList()
+                    val rawLines = resp.body()?.logLines() ?: emptyList()
                     val parsed = rawLines.map { parseLine(it) }
                     _uiState.update {
                         it.copy(
