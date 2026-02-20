@@ -8,8 +8,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import com.knknkn92.craftymobile.ui.dashboard.DashboardScreen
 import com.knknkn92.craftymobile.ui.login.LoginScreen
+import com.knknkn92.craftymobile.ui.main.MainScreen
 import com.knknkn92.craftymobile.ui.theme.CraftyMobileTheme
 
 class MainActivity : ComponentActivity() {
@@ -33,9 +33,14 @@ private fun AppRoot() {
     var baseUrl by remember { mutableStateOf<String?>(null) }
 
     if (token != null && baseUrl != null) {
-        DashboardScreen(
-            baseUrl = baseUrl!!,
-            token   = token!!,
+        MainScreen(
+            baseUrl  = baseUrl!!,
+            token    = token!!,
+            onLogout = {
+                token   = null
+                userId  = null
+                baseUrl = null
+            },
         )
     } else {
         LoginScreen(

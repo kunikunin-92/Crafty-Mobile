@@ -73,15 +73,17 @@ data class ServerStatsResponse(
  * }
  */
 data class ServerStats(
-    // server_id はネストオブジェクト
+    // server_id はネストオブジェクト（サーバー設定情報を含む）
     @SerializedName("server_id")     val serverIdObj: ServerIdInfo? = null,
     @SerializedName("running")       val running: Boolean = false,
     @SerializedName("crashed")       val crashed: Boolean = false,
     @SerializedName("cpu")           val cpu: Float = 0f,
-    @SerializedName("mem")           val mem: Float = 0f,
+    // mem は "3.7GB" のような文字列で返ってくる
+    @SerializedName("mem")           val mem: String? = null,
     @SerializedName("mem_percent")   val memPercent: Float = 0f,
     @SerializedName("online")        val online: Int = 0,
     @SerializedName("max")           val max: Int = 0,
+    // players は "[]" や "[\"Player1\"]" のようなJSON文字列
     @SerializedName("players")       val players: String? = null,
     @SerializedName("version")       val version: String? = null,
     @SerializedName("world_name")    val worldName: String? = null,
@@ -90,7 +92,28 @@ data class ServerStats(
     @SerializedName("desc")          val desc: String? = null,
     @SerializedName("updating")      val updating: Boolean = false,
     @SerializedName("waiting_start") val waitingStart: Boolean = false,
-)
+) {
+    /**
+     * players フィールドをパースしてプレイヤー名リストを返す。
+     * Crafty v4 は players を JSON 配列文字列 "[]" や "[\"Name\"]" で返す。
+     */
+    fun playerNames(): List<String> {
+        val raw = players ?: return emptyList()
+        // "[]" または空の場合
+        val trimmed = raw.trim()
+        if (trimmed == "[]" || trimmed.isBlank()) return emptyList()
+        // "[\"Player1\", \"Player2\"]" → リストを手動パース
+        return try {
+            trimmed
+                .removePrefix("[").removeSuffix("]")
+                .split(",")
+                .map { it.trim().removeSurrounding("\"") }
+                .filter { it.isNotEmpty() }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+}
 
 /** stats.server_id の中のサーバー基本情報 */
 data class ServerIdInfo(

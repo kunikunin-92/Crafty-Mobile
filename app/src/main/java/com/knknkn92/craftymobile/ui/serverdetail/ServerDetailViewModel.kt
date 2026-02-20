@@ -182,15 +182,8 @@ class ServerDetailViewModel(
                     val stats = statsResp.body()?.data
                     Log.d(TAG, "stats: running=${stats?.running} cpu=${stats?.cpu} players='${stats?.players}'")
 
-                    val rawPlayers = stats?.players ?: ""
-                    // "False" や空文字列は「プレイヤーなし」として扱う
-                    val names = if (rawPlayers.isBlank() || rawPlayers.equals("False", ignoreCase = true)) {
-                        emptyList()
-                    } else {
-                        rawPlayers.split(",")
-                            .map { it.trim() }
-                            .filter { it.isNotEmpty() }
-                    }
+                    // playerNames() が "[]" や JSON 配列文字列をパース
+                    val names = stats?.playerNames() ?: emptyList()
                     _uiState.update {
                         it.copy(
                             onlinePlayers    = names.map { OnlinePlayer(it) },
