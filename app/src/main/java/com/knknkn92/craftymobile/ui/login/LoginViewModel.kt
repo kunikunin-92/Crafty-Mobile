@@ -19,6 +19,8 @@ data class LoginUiState(
     val token: String? = null,
     val userId: String? = null,
     val errorMessage: String? = null,
+    // ログイン成功時に baseUrl をセットして画面側で検知する
+    val loggedInBaseUrl: String? = null,
 )
 
 class LoginViewModel : ViewModel() {
@@ -41,7 +43,7 @@ class LoginViewModel : ViewModel() {
         }
     }
 
-    fun login(onLoginSuccess: (token: String, userId: String, baseUrl: String) -> Unit = { _, _, _ -> }) {
+    fun login() {
         val state = _uiState.value
 
         if (state.serverAddress.isBlank()) {
@@ -80,16 +82,16 @@ class LoginViewModel : ViewModel() {
                 if (response.isSuccessful) {
                     val body = response.body()
                     if (body?.status == "ok" && body.data != null) {
-                        // loginSuccess フラグ不要 — 直接コールバックで遷移
+                        // loggedInBaseUrl をセットして LoginScreen 側の LaunchedEffect で検知
                         _uiState.update {
                             it.copy(
-                                isLoading     = false,
-                                token         = body.data.token,
-                                userId        = body.data.userId,
-                                serverAddress = baseUrl,
+                                isLoading      = false,
+                                token          = body.data.token,
+                                userId         = body.data.userId,
+                                serverAddress  = baseUrl,
+                                loggedInBaseUrl = baseUrl,
                             )
                         }
-                        onLoginSuccess(body.data.token, body.data.userId, baseUrl)
                     } else {
                         _uiState.update {
                             it.copy(

@@ -36,6 +36,12 @@ fun LoginScreen(
     val state by vm.uiState.collectAsState()
     var showPassword by remember { mutableStateOf(false) }
 
+    // loggedInBaseUrl がセットされたら画面遷移（Compose の再コンポーズ安全なタイミングで実行）
+    LaunchedEffect(state.loggedInBaseUrl) {
+        val url = state.loggedInBaseUrl ?: return@LaunchedEffect
+        onLoginSuccess(state.token ?: "", state.userId ?: "", url)
+    }
+
     // Error dialog
     if (state.errorMessage != null) {
         AlertDialog(
@@ -209,7 +215,7 @@ fun LoginScreen(
 
         // ---- Login Button ----
         Button(
-            onClick  = { vm.login(onLoginSuccess) },
+            onClick  = { vm.login() },
             enabled  = !state.isLoading,
             modifier = Modifier
                 .fillMaxWidth()
